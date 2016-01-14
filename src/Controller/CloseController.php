@@ -16,6 +16,7 @@ namespace Eventum\Controller;
 use Auth;
 use Contract;
 use CRM;
+use Note;
 use Custom_Field;
 use Issue;
 use Misc;
@@ -117,10 +118,27 @@ class CloseController extends BaseController
         }
     }
 
+    private function markAsDuplicate($dup_issue_id) {
+        $res = Issue::markAsDuplicate($this->issue_id, $dup_issue_id);
+        $map = array(
+            1 => array(ev_gettext('Thank you, the issue was marked as a duplicate successfully'), Misc::MSG_INFO),
+            // FIXME: it's not much informative that mark as duplicate failed
+            // TODO: should whole update be aborted?
+            -1 => array(ev_gettext('Sorry, an error happened while trying to run your query.'), Misc::MSG_ERROR),
+        );
+        Misc::mapMessages($res, $map);
+    }
+
     private function closeAction()
     {
         $request = $this->getRequest();
         $post = $request->request;
+
+        // see if need to mark issue duplciated first
+        $dup_issue_id = $post->getInt('duplicated_issue');
+        if ($dup_issue_id) {
+            $this->markAsDuplicate($dup_issue_id);
+        }
 
         Custom_Field::updateFromPost();
         $res = Issue::close(
@@ -177,6 +195,7 @@ class CloseController extends BaseController
                 'notify_list' => Notification::getLastNotifiedAddresses($this->issue_id),
                 'custom_fields' => $custom_fields,
                 'issue_id' => $this->issue_id,
+                'mark_duplicated' => $this->cat == 'duplicate',
             )
         );
 
